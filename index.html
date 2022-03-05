@@ -19,7 +19,7 @@ class: center, middle, inverse, title-slide
 # Programmatically creating tabs in Rmarkdown
 ## Monday Munch
 ### Jonathan Jayes
-### <a href="https://interludeone.com/">Makromackan</a> 05 March, 2022
+### <a href="https://interludeone.com/">05 March, 2022</a>
 
 ---
 
@@ -55,11 +55,9 @@ class: inverse, center, middle
 ---
 
 
-# TOC
+# Plan
 
 .pull-left[
-
-## Plan
 
 1. [What is the problem?](#problem)
 
@@ -79,6 +77,7 @@ class: inverse, center, middle
 
 
 ---
+name: problem
 
 # Problem
 
@@ -135,7 +134,6 @@ If I hardcode the number of tabs:
 
 
 
-
 .panelset[
 .panel[.panel-name[Biscoe]
 &lt;img src="index_files/figure-html/unnamed-chunk-6-1.svg" style="display: block; margin: auto;" /&gt;
@@ -148,7 +146,46 @@ If I hardcode the number of tabs:
 &lt;img src="index_files/figure-html/unnamed-chunk-8-1.svg" style="display: block; margin: auto;" /&gt;
 ]
 ]
+
+One of the plots is empty!
 ---
+
+# Bad solutions
+
+- Amend my `plot_penguins` function to not plot if there is no data:
+
+
+```r
+plot_penguins &lt;- function(isl) {
+* if (dim(df %&gt;% filter(island == isl))[1] != 0) {
+    df %&gt;%
+      filter(island == isl) %&gt;%
+      ggplot(aes(bill_length_mm, bill_depth_mm, colour = body_mass_g,
+        shape = species)) +
+      geom_point(cex = 2) +
+      geom_smooth(method = "lm", se = F) +
+      scale_color_viridis_c(labels = scales::number_format()) +
+      labs(
+        x = "Bill length (mm)",
+        y = "Bill depth (mm)",
+        colour = "Body mass (g)",
+        shape = "Penguin species"
+      )
+* }
+}
+```
+
+- Others?
+
+---
+class: inverse, center, middle
+
+# Better solution
+
+### Generate the tabs programmatically, with code that writes itself depending on the contents of the returned dataset.
+
+---
+name: tools
 
 # Tools
 
@@ -164,7 +201,7 @@ In vanilla Rmarkdown you can create the tabs with a simple heading structure.
 
 
 ```r
-## Here are the penguins {.panelset}
+## Here are the penguins {.panelset} 
 
 ### Biscoe
 plot_penguins("Biscoe")
@@ -175,7 +212,7 @@ plot_penguins("Dream")
 
 --
 
-In my report however I do not want the end of the panel to be delineated only by another second level heading:
+In my report however I do not want the end of the tabset to be delineated only by another second level heading:
 
 
 ```r
@@ -215,12 +252,15 @@ plot_penguins("Dream")
 ```
 
 ---
+name: work
+
 # How does it work?
 
 Now I can programmatically create my tabs and plots within the fences:
 
 
 ```r
+# function to make the tabs
 make_tab &lt;- function(isl) {
   cat("::: {.panel}\n")
   cat("##", isl, "{.panel-name}\n")
@@ -232,10 +272,10 @@ make_tab &lt;- function(isl) {
 }
 
 ::::: {.panelset}
-
+# get a list of islands present in the dataset
 isl_list &lt;- unique(df$island) %&gt;% as.character()
-
-for i in isl_list{
+# make the tabs for each island that is there
+for (i in isl_list){
   
   make_tab(i)
   
@@ -248,15 +288,15 @@ for i in isl_list{
 
 # To remember
 
-1. Wrap code you want executed in `cat()` and `print()` your ggplot objects.
+- Wrap code you want executed in `cat()` and `print()` your ggplot objects.
 
-1. Set code options to `results = 'asis'`, according to the [Rmarkdown Cookbook](https://bookdown.org/yihui/rmarkdown-cookbook/results-asis.html): 
+- Set code options to `results = 'asis'` for the code chunk that makes your tabs, according to the [Rmarkdown Cookbook](https://bookdown.org/yihui/rmarkdown-cookbook/results-asis.html): 
 
 &lt;blockquote&gt; 
 This option tells knitr not to wrap your text output in verbatim code blocks, but treat it “as is.” This can be particularly useful when you want to generate content dynamically from R code.
 &lt;/blockquote&gt;
 
-1. Put in lots of line breaks to separate Rmarkdown content, e.g. frequent uses of `cat("\n")` between elements.
+- Put in lots of line breaks to separate Rmarkdown content, e.g. frequent uses of `cat("\n")` between elements.
 
 ---
 class: inverse, center, middle
@@ -265,21 +305,54 @@ class: inverse, center, middle
 
 ---
 
+# Yes!
 
 
----
 
 .panelset[
 
 .panel[.panel-name[Biscoe]
-Plot of Biscoe 
-&lt;img src="index_files/figure-html/unnamed-chunk-15-1.svg" style="display: block; margin: auto;" /&gt;
+&lt;img src="index_files/figure-html/unnamed-chunk-16-1.svg" style="display: block; margin: auto;" /&gt;
 ]
 .panel[.panel-name[Dream]
-Plot of Dream 
-&lt;img src="index_files/figure-html/unnamed-chunk-15-2.svg" style="display: block; margin: auto;" /&gt;
+&lt;img src="index_files/figure-html/unnamed-chunk-16-2.svg" style="display: block; margin: auto;" /&gt;
 ]
 
+]
+
+---
+
+# Yes*
+
+For the `xaringan` slides we must use the `.panelset[...]` notation:
+
+
+```r
+make_tab_xaringan &lt;- function(isl) {
+  cat(".panel[.panel-name[", isl, "]\n", sep = "")
+  p &lt;- plot_penguins(isl)
+  print(p)
+  cat("\n")
+  cat("]\n")
+}
+
+.panelset[
+
+isl_list &lt;- unique(df$island) %&gt;% as.character()
+
+for (i in isl_list){
+  make_tab_xaringan(i)
+}
+]
+```
+
+But in Rmarkdown parametrized reports the code on [slide 11](#work) works very well!
+
+---
+
+class: inverse, center, middle
+
+# Thank you
     </textarea>
 <style data-target="print-only">@media screen {.remark-slide-container{display:block;}.remark-slide-scaler{box-shadow:none;}}</style>
 <script src="https://remarkjs.com/downloads/remark-latest.min.js"></script>

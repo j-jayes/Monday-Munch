@@ -206,6 +206,8 @@ I am creating the tabs with [Garrick Aden-Buie's](https://www.garrickadenbuie.co
 knitr::include_url("https://pkg.garrickadenbuie.com/xaringanExtra/panelset/?panelset=r-code#2")
 ```
 
+Other useful sources incude [this Science Loft post](https://scienceloft.com/technical/programmatically-create-new-headings-and-outputs-in-rmarkdown/) and [this Stack Overflow question](https://stackoverflow.com/questions/63397427/programmatically-create-tab-and-plot-in-markdown).
+
 ---
 
 # Tools

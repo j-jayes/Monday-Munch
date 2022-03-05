@@ -1,0 +1,406 @@
+<!DOCTYPE html>
+<html lang="" xml:lang="">
+  <head>
+    <title>Programmatically creating tabs in Rmarkdown</title>
+    <meta charset="utf-8" />
+    <meta name="author" content="Jonathan Jayes" />
+    <script src="libs/header-attrs-2.11/header-attrs.js"></script>
+    <link href="libs/remark-css-0.0.1/default.css" rel="stylesheet" />
+    <link href="libs/remark-css-0.0.1/metropolis.css" rel="stylesheet" />
+    <link href="libs/remark-css-0.0.1/metropolis-fonts.css" rel="stylesheet" />
+    <link href="libs/panelset-0.2.6/panelset.css" rel="stylesheet" />
+    <script src="libs/panelset-0.2.6/panelset.js"></script>
+    <script src="libs/xaringanExtra-progressBar-0.0.1/progress-bar.js"></script>
+  </head>
+  <body>
+    <textarea id="source">
+class: center, middle, inverse, title-slide
+
+# Programmatically creating tabs in Rmarkdown
+## Monday Munch
+### Jonathan Jayes
+### <a href="https://interludeone.com/">Makromackan</a> 05 March, 2022
+
+---
+
+
+class: inverse, center, middle
+
+
+
+
+<style>.xe__progress-bar__container {
+  top:0;
+  opacity: 1;
+  position:absolute;
+  right:0;
+  left: 0;
+}
+.xe__progress-bar {
+  height: 5px;
+  background-color: #EB821D;
+  width: calc(var(--slide-current) / var(--slide-total) * 100%);
+}
+.remark-visible .xe__progress-bar {
+  animation: xe__progress-bar__wipe 200ms forwards;
+  animation-timing-function: cubic-bezier(.86,0,.07,1);
+}
+@keyframes xe__progress-bar__wipe {
+  0% { width: calc(var(--slide-previous) / var(--slide-total) * 100%); }
+  100% { width: calc(var(--slide-current) / var(--slide-total) * 100%); }
+}</style>
+
+# When to write code that writes its own code
+
+---
+
+
+# TOC
+
+.pull-left[
+
+## Plan
+
+1. [What is the problem?](#problem)
+
+2. [What are the tools to solve it?](#tools)
+
+3. [How does it work?](#work)
+
+
+]
+
+.pull-right[
+
+&lt;img src="images/cover.jpg" width="853" style="display: block; margin: auto;" /&gt;
+
+
+]
+
+
+---
+
+# Problem
+
+.pull-left[
+
+I want to create a parametrized report in Rmarkdown. 
+
+The report is populated after querying a database.
+
+I want to have tabs in the report that display a graph for subsets of the data.
+
+The number of subsets depends on the result of the query.
+
+We simulate the problem by randomly removing one of the islands from the `palmerpenguins` dataset.
+
+]
+
+.pull-right[
+
+
+```r
+df &lt;- palmerpenguins::penguins
+
+df %&gt;% distinct(island) %&gt;% 
+  knitr::kable()
+```
+
+
+
+|island    |
+|:---------|
+|Torgersen |
+|Biscoe    |
+|Dream     |
+
+```r
+island_subsample &lt;- df %&gt;% 
+  distinct(island) %&gt;%
+  slice_sample(n = 2)
+
+df &lt;- df %&gt;% 
+  filter(island %in% 
+           island_subsample$island)
+```
+
+
+]
+
+---
+
+# Problem
+
+If I hardcode the number of tabs:
+
+
+
+
+.panelset[
+.panel[.panel-name[Biscoe]
+&lt;img src="index_files/figure-html/unnamed-chunk-6-1.svg" style="display: block; margin: auto;" /&gt;
+]
+.panel[.panel-name[Dream]
+&lt;img src="index_files/figure-html/unnamed-chunk-7-1.svg" style="display: block; margin: auto;" /&gt;
+]
+
+.panel[.panel-name[Torgersen]
+&lt;img src="index_files/figure-html/unnamed-chunk-8-1.svg" style="display: block; margin: auto;" /&gt;
+]
+]
+---
+
+# Tools
+
+I am creating the tabs with [Garrick Aden-Buie's](https://www.garrickadenbuie.com/) `xaringanExtra` package.
+
+&lt;iframe src="https://pkg.garrickadenbuie.com/xaringanExtra/panelset/?panelset=r-code#2" width="100%" height="400px" data-external="1"&gt;&lt;/iframe&gt;
+
+---
+
+# Tools
+
+In vanilla Rmarkdown you can create the tabs with a simple heading structure.
+
+
+```r
+## Here are the penguins {.panelset}
+
+### Biscoe
+plot_penguins("Biscoe")
+
+### Dream
+plot_penguins("Dream")
+```
+
+--
+
+In my report however I do not want the end of the panel to be delineated only by another second level heading:
+
+
+```r
+*## Here are the penguins {.panelset}
+
+### Biscoe
+plot_penguins("Biscoe")
+
+### Dream
+plot_penguins("Dream")
+
+*## More about the penguins
+```
+
+
+---
+
+# Tools
+
+Instead I opt to use [Pandoc's fenced div structure](https://pandoc.org/MANUAL.html#extension-fenced_divs), which looks like this:
+
+
+```r
+::::: {.panelset}
+
+::: {.panel}
+[Biscoe]{.panel-name}
+plot_penguins("Biscoe")
+:::
+
+::: {.panel}
+[Dream]{.panel-name}
+plot_penguins("Dream")
+:::
+
+:::::
+```
+
+---
+# How does it work?
+
+Now I can programmatically create my tabs and plots within the fences:
+
+
+```r
+make_tab &lt;- function(isl) {
+  cat("::: {.panel}\n")
+  cat("##", isl, "{.panel-name}\n")
+  cat("Plot of", isl, "\n")
+  p &lt;- plot_penguins(isl)
+  print(p)
+  cat("\n")
+  cat(":::\n")
+}
+
+::::: {.panelset}
+
+isl_list &lt;- unique(df$island) %&gt;% as.character()
+
+for i in isl_list{
+  
+  make_tab(i)
+  
+}
+
+:::::
+```
+
+---
+
+# To remember
+
+1. Wrap code you want executed in `cat()` and `print()` your ggplot objects.
+
+1. Set code options to `results = 'asis'`, according to the [Rmarkdown Cookbook](https://bookdown.org/yihui/rmarkdown-cookbook/results-asis.html): 
+
+&lt;blockquote&gt; 
+This option tells knitr not to wrap your text output in verbatim code blocks, but treat it “as is.” This can be particularly useful when you want to generate content dynamically from R code.
+&lt;/blockquote&gt;
+
+1. Put in lots of line breaks to separate Rmarkdown content, e.g. frequent uses of `cat("\n")` between elements.
+
+---
+class: inverse, center, middle
+
+# Does it work?
+
+---
+
+
+
+---
+
+.panelset[
+
+.panel[.panel-name[Biscoe]
+Plot of Biscoe 
+&lt;img src="index_files/figure-html/unnamed-chunk-15-1.svg" style="display: block; margin: auto;" /&gt;
+]
+.panel[.panel-name[Dream]
+Plot of Dream 
+&lt;img src="index_files/figure-html/unnamed-chunk-15-2.svg" style="display: block; margin: auto;" /&gt;
+]
+
+    </textarea>
+<style data-target="print-only">@media screen {.remark-slide-container{display:block;}.remark-slide-scaler{box-shadow:none;}}</style>
+<script src="https://remarkjs.com/downloads/remark-latest.min.js"></script>
+<script>var slideshow = remark.create({
+"highlightStyle": "github",
+"highlightLines": true,
+"countIncrementalSlides": false,
+"slideNumberFormat": "%current%"
+});
+if (window.HTMLWidgets) slideshow.on('afterShowSlide', function (slide) {
+  window.dispatchEvent(new Event('resize'));
+});
+(function(d) {
+  var s = d.createElement("style"), r = d.querySelector(".remark-slide-scaler");
+  if (!r) return;
+  s.type = "text/css"; s.innerHTML = "@page {size: " + r.style.width + " " + r.style.height +"; }";
+  d.head.appendChild(s);
+})(document);
+
+(function(d) {
+  var el = d.getElementsByClassName("remark-slides-area");
+  if (!el) return;
+  var slide, slides = slideshow.getSlides(), els = el[0].children;
+  for (var i = 1; i < slides.length; i++) {
+    slide = slides[i];
+    if (slide.properties.continued === "true" || slide.properties.count === "false") {
+      els[i - 1].className += ' has-continuation';
+    }
+  }
+  var s = d.createElement("style");
+  s.type = "text/css"; s.innerHTML = "@media print { .has-continuation { display: none; } }";
+  d.head.appendChild(s);
+})(document);
+// delete the temporary CSS (for displaying all slides initially) when the user
+// starts to view slides
+(function() {
+  var deleted = false;
+  slideshow.on('beforeShowSlide', function(slide) {
+    if (deleted) return;
+    var sheets = document.styleSheets, node;
+    for (var i = 0; i < sheets.length; i++) {
+      node = sheets[i].ownerNode;
+      if (node.dataset["target"] !== "print-only") continue;
+      node.parentNode.removeChild(node);
+    }
+    deleted = true;
+  });
+})();
+(function() {
+  "use strict"
+  // Replace <script> tags in slides area to make them executable
+  var scripts = document.querySelectorAll(
+    '.remark-slides-area .remark-slide-container script'
+  );
+  if (!scripts.length) return;
+  for (var i = 0; i < scripts.length; i++) {
+    var s = document.createElement('script');
+    var code = document.createTextNode(scripts[i].textContent);
+    s.appendChild(code);
+    var scriptAttrs = scripts[i].attributes;
+    for (var j = 0; j < scriptAttrs.length; j++) {
+      s.setAttribute(scriptAttrs[j].name, scriptAttrs[j].value);
+    }
+    scripts[i].parentElement.replaceChild(s, scripts[i]);
+  }
+})();
+(function() {
+  var links = document.getElementsByTagName('a');
+  for (var i = 0; i < links.length; i++) {
+    if (/^(https?:)?\/\//.test(links[i].getAttribute('href'))) {
+      links[i].target = '_blank';
+    }
+  }
+})();
+// adds .remark-code-has-line-highlighted class to <pre> parent elements
+// of code chunks containing highlighted lines with class .remark-code-line-highlighted
+(function(d) {
+  const hlines = d.querySelectorAll('.remark-code-line-highlighted');
+  const preParents = [];
+  const findPreParent = function(line, p = 0) {
+    if (p > 1) return null; // traverse up no further than grandparent
+    const el = line.parentElement;
+    return el.tagName === "PRE" ? el : findPreParent(el, ++p);
+  };
+
+  for (let line of hlines) {
+    let pre = findPreParent(line);
+    if (pre && !preParents.includes(pre)) preParents.push(pre);
+  }
+  preParents.forEach(p => p.classList.add("remark-code-has-line-highlighted"));
+})(document);</script>
+
+<script>
+slideshow._releaseMath = function(el) {
+  var i, text, code, codes = el.getElementsByTagName('code');
+  for (i = 0; i < codes.length;) {
+    code = codes[i];
+    if (code.parentNode.tagName !== 'PRE' && code.childElementCount === 0) {
+      text = code.textContent;
+      if (/^\\\((.|\s)+\\\)$/.test(text) || /^\\\[(.|\s)+\\\]$/.test(text) ||
+          /^\$\$(.|\s)+\$\$$/.test(text) ||
+          /^\\begin\{([^}]+)\}(.|\s)+\\end\{[^}]+\}$/.test(text)) {
+        code.outerHTML = code.innerHTML;  // remove <code></code>
+        continue;
+      }
+    }
+    i++;
+  }
+};
+slideshow._releaseMath(document);
+</script>
+<!-- dynamically load mathjax for compatibility with self-contained -->
+<script>
+(function () {
+  var script = document.createElement('script');
+  script.type = 'text/javascript';
+  script.src  = 'https://mathjax.rstudio.com/latest/MathJax.js?config=TeX-MML-AM_CHTML';
+  if (location.protocol !== 'file:' && /^https?:/.test(script.src))
+    script.src  = script.src.replace(/^https?:/, '');
+  document.getElementsByTagName('head')[0].appendChild(script);
+})();
+</script>
+  </body>
+</html>

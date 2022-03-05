@@ -1,0 +1,308 @@
+---
+title: "Programmatically creating tabs in Rmarkdown"
+subtitle: "Monday Munch"
+author: "Jonathan Jayes"
+date: "[Makromackan](https://interludeone.com/) `r format(Sys.time(), '%d %B, %Y')`"
+output:
+  xaringan::moon_reader:
+    seal: true
+    css: [default, metropolis, metropolis-fonts]
+    lib_dir: libs
+    nature:
+      highlightStyle: github
+      highlightLines: true
+      countIncrementalSlides: false
+      slideNumberFormat: "%current%"
+      
+---
+
+class: inverse, center, middle
+
+
+```{r, echo=F, message=F, warning=F}
+# options(htmltools.dir.version = FALSE)
+library(knitr)
+opts_chunk$set(
+  fig.align="center",  
+  fig.height=4, 
+  dev = "svg",
+  #fig.width=6,
+  # out.width="748px", #out.length="520.75px",
+  # dpi=300, #fig.path='Figs/',
+  cache=F, echo=F, warning=F, message=F
+)
+library(hrbrthemes)
+library(fontawesome)
+library(xaringan)
+library(xaringanExtra)
+library(tidyverse)
+# library(here)
+library(xaringanthemer)
+```
+
+```{r}
+xaringanExtra::use_panelset()
+xaringanExtra::use_progress_bar(color = "#EB821D", location = "top", height = "5px")
+theme_set(theme_light())
+```
+
+# When to write code that writes its own code
+
+---
+
+
+# TOC
+
+.pull-left[
+
+## Plan
+
+1. [What is the problem?](#problem)
+
+2. [What are the tools to solve it?](#tools)
+
+3. [How does it work?](#work)
+
+
+]
+
+.pull-right[
+
+```{r}
+knitr::include_graphics("images/cover.jpg")
+```
+
+
+]
+
+
+---
+
+# Problem
+
+.pull-left[
+
+I want to create a parametrized report in Rmarkdown. 
+
+The report is populated after querying a database.
+
+I want to have tabs in the report that display a graph for subsets of the data.
+
+The number of subsets depends on the result of the query.
+
+We simulate the problem by randomly removing one of the islands from the `palmerpenguins` dataset.
+
+]
+
+.pull-right[
+
+```{r, echo=T}
+df <- palmerpenguins::penguins
+
+df %>% distinct(island) %>% 
+  knitr::kable()
+
+island_subsample <- df %>% 
+  distinct(island) %>%
+  slice_sample(n = 2)
+
+df <- df %>% 
+  filter(island %in% 
+           island_subsample$island)
+```
+
+
+]
+
+---
+
+# Problem
+
+If I hardcode the number of tabs:
+
+```{r}
+plot_penguins <- function(isl) {
+  df %>%
+    filter(island == isl) %>%
+    ggplot(aes(bill_length_mm, 
+               bill_depth_mm, 
+               colour = body_mass_g, 
+               shape = species)) +
+    geom_point(cex = 2) +
+    geom_smooth(method = "lm", se = F) +
+    scale_color_viridis_c(labels = scales::number_format()) +
+    labs(
+      x = "Bill length (mm)",
+      y = "Bill depth (mm)",
+      colour = "Body mass (g)",
+      shape = "Penguin species"
+    )
+}
+```
+
+
+.panelset[
+.panel[.panel-name[Biscoe]
+```{r}
+plot_penguins("Biscoe")
+```
+]
+.panel[.panel-name[Dream]
+```{r}
+plot_penguins("Dream")
+```
+]
+
+.panel[.panel-name[Torgersen]
+```{r}
+plot_penguins("Torgersen")
+```
+]
+]
+---
+
+# Tools
+
+I am creating the tabs with [Garrick Aden-Buie's](https://www.garrickadenbuie.com/) `xaringanExtra` package.
+
+```{r}
+knitr::include_url("https://pkg.garrickadenbuie.com/xaringanExtra/panelset/?panelset=r-code#2")
+```
+
+---
+
+# Tools
+
+In vanilla Rmarkdown you can create the tabs with a simple heading structure.
+
+```{r, eval=F, echo=T}
+## Here are the penguins {.panelset}
+
+### Biscoe
+plot_penguins("Biscoe")
+
+### Dream
+plot_penguins("Dream")
+
+
+```
+
+--
+
+In my report however I do not want the end of the panel to be delineated only by another second level heading:
+
+```{r, eval=F, echo=T}
+## Here are the penguins {.panelset}  #<<
+
+### Biscoe
+plot_penguins("Biscoe")
+
+### Dream
+plot_penguins("Dream")
+
+## More about the penguins #<<
+
+```
+
+
+---
+
+# Tools
+
+Instead I opt to use [Pandoc's fenced div structure](https://pandoc.org/MANUAL.html#extension-fenced_divs), which looks like this:
+
+```{r, eval=F, echo=T}
+::::: {.panelset}
+
+::: {.panel}
+[Biscoe]{.panel-name}
+plot_penguins("Biscoe")
+:::
+
+::: {.panel}
+[Dream]{.panel-name}
+plot_penguins("Dream")
+:::
+
+:::::
+```
+
+---
+# How does it work?
+
+Now I can programmatically create my tabs and plots within the fences:
+
+```{r, eval=F, echo=T}
+make_tab <- function(isl) {
+  cat("::: {.panel}\n")
+  cat("##", isl, "{.panel-name}\n")
+  cat("Plot of", isl, "\n")
+  p <- plot_penguins(isl)
+  print(p)
+  cat("\n")
+  cat(":::\n")
+}
+
+::::: {.panelset}
+
+isl_list <- unique(df$island) %>% as.character()
+
+for i in isl_list{
+  
+  make_tab(i)
+  
+}
+
+:::::
+
+```
+
+---
+
+# To remember
+
+1. Wrap code you want executed in `cat()` and `print()` your ggplot objects.
+
+1. Set code options to `results = 'asis'`, according to the [Rmarkdown Cookbook](https://bookdown.org/yihui/rmarkdown-cookbook/results-asis.html): 
+
+<blockquote> 
+This option tells knitr not to wrap your text output in verbatim code blocks, but treat it “as is.” This can be particularly useful when you want to generate content dynamically from R code.
+</blockquote>
+
+1. Put in lots of line breaks to separate Rmarkdown content, e.g. frequent uses of `cat("\n")` between elements.
+
+---
+class: inverse, center, middle
+
+# Does it work?
+
+---
+
+```{r}
+make_tab_xaringan <- function(isl) {
+  cat(".panel[.panel-name[", isl, "]\n", sep = "")
+  cat("Plot of", isl, "\n")
+  p <- plot_penguins(isl)
+  print(p)
+  cat("\n")
+  cat("]\n")
+}
+
+
+```
+
+---
+
+.panelset[
+
+```{r, results='asis'}
+isl_list <- unique(df$island) %>% as.character()
+
+for (i in isl_list){
+  
+  make_tab_xaringan(i)
+  
+}
+
+```
+
